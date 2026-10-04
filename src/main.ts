@@ -6,7 +6,9 @@ import TileLayer from 'ol/layer/Tile';
 import ScaleLine from 'ol/control/ScaleLine';
 import { defaults as defaultControls } from 'ol/control/defaults';
 import { lv95, LV95_EXTENT, RESOLUTIONS, lv95ToWgs84, trueNorthInGrid, wmtsSource } from './swisstopo';
+import { buffer, getHeight, getWidth } from 'ol/extent';
 import { sunPosition, zurichNow, zurichToDate } from './sun';
+import { loadGrid, sample, stats, type Grid } from './dem';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const dateInput = $<HTMLInputElement>('date');
@@ -14,6 +16,11 @@ const timeInput = $<HTMLInputElement>('time');
 const timeLabel = $<HTMLOutputElement>('timelabel');
 const layerSelect = $<HTMLSelectElement>('baselayer');
 const sunInfo = $<HTMLDivElement>('sun');
+const terrainInfo = $<HTMLDivElement>('terrain');
+const heightInfo = $<HTMLDivElement>('height');
+
+const SHADOW_RADIUS = 15000; // m: terrain further away is ignored
+const MAX_VIEW_SIZE = 25000; // m: beyond this, no shadow computation
 
 // --- state from URL hash: #d=2026-11-15&t=08:30&x=2676500&y=1176200&z=20&l=... ---
 const params = new URLSearchParams(location.hash.slice(1));
@@ -89,7 +96,50 @@ layerSelect.addEventListener('change', () => {
   baseLayer.setSource(wmtsSource(layerSelect.value));
   writeHash();
 });
-map.on('moveend', update);
+// --- terrain: view at 10 m, view + shadow radius at 40 m ---
+let terrain: { near: Grid; far: Grid } | null = null;
+let terrainGen = 0;
+
+async function loadTerrain() {
+  const extent = view.calculateExtent(map.getSize());
+  if (Math.max(getWidth(extent), getHeight(extent)) > MAX_VIEW_SIZE) {
+    terrain = null;
+    terrainInfo.textContent = 'Gelände: zum Berechnen weiter hineinzoomen';
+    return;
+  }
+  const gen = ++terrainGen;
+  const t0 = performance.now();
+  const bytes0 = stats.bytesDecoded;
+  terrainInfo.textContent = 'Gelände: lädt …';
+  try {
+    const [near, far] = await Promise.all([
+      loadGrid(10, buffer(extent, 100)),
+      loadGrid(40, buffer(extent, SHADOW_RADIUS)),
+    ]);
+    if (gen !== terrainGen) return; // superseded by a newer view
+    terrain = { near, far };
+    const mb = (stats.bytesDecoded - bytes0) / 1e6;
+    terrainInfo.textContent =
+      `Gelände: 10 m ${near.width}×${near.height}, 40 m ${far.width}×${far.height}` +
+      ` (${mb.toFixed(1)} MB neu, ${((performance.now() - t0) / 1000).toFixed(1)} s)`;
+  } catch (err) {
+    if (gen !== terrainGen) return;
+    console.error(err);
+    terrainInfo.textContent = 'Gelände: Fehler beim Laden';
+  }
+}
+
+function showHeight(coord: number[]) {
+  const h = terrain ? sample(terrain.near, coord[0], coord[1]) : NaN;
+  heightInfo.textContent = Number.isNaN(h) ? '' : `Höhe am Zeiger: ${h.toFixed(0)} m`;
+}
+map.on('pointermove', (e) => showHeight(e.coordinate));
+map.on('click', (e) => showHeight(e.coordinate));
+
+map.on('moveend', () => {
+  update();
+  loadTerrain();
+});
 update();
 
 export { map };

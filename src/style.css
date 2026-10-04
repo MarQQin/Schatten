@@ -11,6 +11,8 @@ html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; }
 #time { flex: 1; min-width: 0; }
 #timelabel { font-variant-numeric: tabular-nums; font-weight: 600; width: 3.2em; text-align: right; }
 #sun { color: #333; font-variant-numeric: tabular-nums; }
+#panel .small { font-size: 12px; color: #555; }
+#height:empty { display: none; }
 
 @media (max-width: 600px) {
   #panel { top: auto; bottom: 36px; left: 8px; right: 8px; width: auto; }
