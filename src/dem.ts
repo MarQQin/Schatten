@@ -25,6 +25,23 @@ const tileCache = new Map<string, Promise<Float32Array>>();
 
 export const stats = { tilesFetched: 0, bytesDecoded: 0 };
 
+// geotiff.js keeps fetched bytes in a small block cache (~100 × 64 KB). Too many parallel
+// tile reads evict blocks before a tile is assembled ("Offset is outside the bounds of the
+// DataView"), so reads are limited to a few at a time.
+const MAX_PARALLEL = 4;
+let active = 0;
+const waiting: (() => void)[] = [];
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  if (active >= MAX_PARALLEL) await new Promise<void>((r) => waiting.push(r));
+  active++;
+  try {
+    return await fn();
+  } finally {
+    active--;
+    waiting.shift()?.();
+  }
+}
+
 function image(level: number): Promise<GeoTIFFImage> {
   tiffPromise ??= fromUrl(URL_REGIO);
   let img = images.get(level);
@@ -49,7 +66,9 @@ function loadTile(res: Resolution, tx: number, ty: number): Promise<Float32Array
     const y0 = ty * TILE;
     const x1 = Math.min(x0 + TILE, img.getWidth());
     const y1 = Math.min(y0 + TILE, img.getHeight());
-    const raster = (await img.readRasters({ window: [x0, y0, x1, y1], interleave: true })) as unknown as Float32Array;
+    const read = () =>
+      limited(() => img.readRasters({ window: [x0, y0, x1, y1], interleave: true })) as unknown as Promise<Float32Array>;
+    const raster = await read().catch(read); // one retry
     // pad partial edge tiles to TILE×TILE, convert nodata to NaN
     const out = new Float32Array(TILE * TILE).fill(NaN);
     const w = x1 - x0;

@@ -10,6 +10,13 @@ import { buffer, getHeight, getWidth } from 'ol/extent';
 import { sunPosition, zurichNow, zurichToDate } from './sun';
 import { loadGrid, sample, stats, type Grid } from './dem';
 import { ShadowLayer } from './shadowLayer.ts';
+import VectorLayer from 'ol/layer/Vector';
+import VectorSource from 'ol/source/Vector';
+import Feature from 'ol/Feature';
+import Point from 'ol/geom/Point';
+import { Circle, Stroke, Style } from 'ol/style';
+import { computeHorizon, litIntervals, sunPath, type Horizon } from './point.ts';
+import { renderPointInfo } from './pointInfo.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const dateInput = $<HTMLInputElement>('date');
@@ -20,6 +27,7 @@ const sunInfo = $<HTMLDivElement>('sun');
 const terrainInfo = $<HTMLDivElement>('terrain');
 const heightInfo = $<HTMLDivElement>('height');
 const opacityInput = $<HTMLInputElement>('opacity');
+const pointBox = $<HTMLDivElement>('pointinfo');
 
 const SHADOW_RADIUS = 15000; // m: terrain further away is ignored
 const MAX_VIEW_SIZE = 25000; // m: beyond this, no shadow computation
@@ -45,9 +53,16 @@ const view = new View({
   constrainOnlyCenter: true,
 });
 const shadow = new ShadowLayer();
+const markerSource = new VectorSource();
+const markerLayer = new VectorLayer({
+  source: markerSource,
+  style: new Style({
+    image: new Circle({ radius: 7, stroke: new Stroke({ color: '#d00', width: 2.5 }) }),
+  }),
+});
 const map = new Map({
   target: 'map',
-  layers: [baseLayer, shadow.layer],
+  layers: [baseLayer, shadow.layer, markerLayer],
   controls: defaultControls().extend([new ScaleLine()]),
   view,
 });
@@ -65,6 +80,7 @@ function writeHash() {
     `z=${view.getZoom()}`,
     `l=${layerSelect.value}`,
   ];
+  if (point) p.push(`p=${point[0].toFixed(0)},${point[1].toFixed(0)}`);
   history.replaceState(null, '', '#' + p.join('&'));
 }
 
@@ -85,6 +101,7 @@ function update() {
       ? `Sonne: Azimut ${sun.azimuth.toFixed(1)}°, Höhe ${sun.elevation.toFixed(1)}°`
       : `Sonne unter dem Horizont (${sun.elevation.toFixed(1)}°)`;
   shadow.setSun(sun);
+  refreshPoint();
   writeHash();
 }
 
@@ -128,6 +145,7 @@ async function loadTerrain() {
     if (gen !== terrainGen) return; // superseded by a newer view
     terrain = { near, far };
     shadow.setTerrain(near, far, currentSun());
+    if (point && !horizon) refreshPoint();
     const mb = (stats.bytesDecoded - bytes0) / 1e6;
     terrainInfo.textContent =
       `Gelände: 10 m ${near.width}×${near.height}, 40 m ${far.width}×${far.height}` +
@@ -148,7 +166,46 @@ opacityInput.addEventListener('input', () => shadow.layer.setOpacity(Number(opac
 shadow.layer.setOpacity(Number(opacityInput.value) / 100);
 
 map.on('pointermove', (e) => showHeight(e.coordinate));
-map.on('click', (e) => showHeight(e.coordinate));
+
+// --- selected point: horizon profile and sun times ---
+const pp = params.get('p')?.split(',').map(Number);
+let point: number[] | null = pp?.length === 2 && pp.every(Number.isFinite) ? pp : null;
+let horizon: Horizon | null = null;
+
+function refreshPoint() {
+  markerSource.clear();
+  if (!point) {
+    pointBox.hidden = true;
+    return;
+  }
+  markerSource.addFeature(new Feature(new Point(point)));
+  if (!horizon && terrain) horizon = computeHorizon(terrain.near, terrain.far, point[0], point[1]);
+  if (!horizon) {
+    pointBox.hidden = false;
+    pointBox.innerHTML = '<div>Gelände für diesen Punkt noch nicht geladen …</div>';
+    return;
+  }
+  const [lon, lat] = lv95ToWgs84(point[0], point[1]);
+  const gamma = trueNorthInGrid(point[0], point[1]);
+  const path = sunPath(horizon, dateInput.value, lat, lon, gamma);
+  renderPointInfo(pointBox, horizon, path, litIntervals(path), gamma, Number(timeInput.value));
+}
+
+map.on('singleclick', (e) => {
+  showHeight(e.coordinate);
+  point = e.coordinate;
+  horizon = null;
+  refreshPoint();
+  writeHash();
+});
+pointBox.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('.close')) {
+    point = null;
+    horizon = null;
+    refreshPoint();
+    writeHash();
+  }
+});
 
 map.on('moveend', () => {
   update();
