@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Schatten</title>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="panel">
+      <label>Karte
+        <select id="baselayer">
+          <option value="ch.swisstopo.pixelkarte-farbe">Landeskarte farbig</option>
+          <option value="ch.swisstopo.pixelkarte-grau">Landeskarte grau</option>
+          <option value="ch.swisstopo.swissimage">Luftbild</option>
+        </select>
+      </label>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
