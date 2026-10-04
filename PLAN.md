@@ -69,3 +69,21 @@ Example question: *Is there sun on the Susten road on a November morning?*
 - Bare-earth terrain: forests and buildings don't cast shadows.
 - 10 m terrain smooths small features: narrow gorges, overhangs, road cuts.
 - Mountains more than 15 km away are ignored. That only matters at very low sun (< ~5°).
+
+## Status / validation (2026-10-04)
+Steps 1–4 and 6 (point info) are done. Step 5 results:
+- **Map vs. point method**: the map sweep and the per-point horizon ray march agree on 293–298 of 300
+  random points (Susten area, 15 Nov, 4 times of day). Remaining differences are on steep, rough
+  ground at sub-pixel scale. This check found and fixed a false self-shadow on crests (the
+  centred-difference normal was replaced by a one-cell probe toward the sun).
+- **Webcam, Sustenpass summit** (livecam.sustenpass.ch via guidle, 48 h archive, 30 min frames),
+  3 and 4 October 2026:
+
+  | Spot (LV95) | App: first sun | Webcam |
+  |---|---|---|
+  | Slope NE of car park (2677260/1176035) | 09:06 | lit at 09:10 |
+  | Lake (2676933/1175850) | 09:11 | shadow edge at 09:10 |
+  | Car park (2677086/1175861) | 09:16 | shaded 09:10, lit 09:30/09:40 |
+
+  Agreement within the frame spacing, roughly ±10 min. The near road stays in the summit
+  building's shadow, which is expected: buildings are not modelled.

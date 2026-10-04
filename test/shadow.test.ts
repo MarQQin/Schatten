@@ -75,3 +75,12 @@ test('sun below horizon: everything shaded', () => {
   const m = computeShadow(near, null, { gridAzimuth: 180, elevation: -1 });
   assert.ok(m.every((v) => v === CAST));
 });
+
+test('summit and ridge crest stay lit (no false self-shadow)', () => {
+  // sharp pyramid peak and a sharp E-W ridge, sun from the SE / S
+  const peak = makeGrid(CX, CY, 1000, 10, (x, y) => 1500 - 0.8 * Math.max(Math.abs(x - CX), Math.abs(y - CY)));
+  assert.equal(at(peak, computeShadow(peak, null, { gridAzimuth: 146, elevation: 18 }), CX + 1, CY + 1), LIT);
+  const ridge = makeGrid(CX, CY, 1000, 10, (_x, y) => 1500 - 0.8 * Math.abs(y - CY));
+  assert.equal(at(ridge, computeShadow(ridge, null, { gridAzimuth: 180, elevation: 18 }), CX, CY + 1), LIT);
+  assert.equal(at(ridge, computeShadow(ridge, null, { gridAzimuth: 180, elevation: 18 }), CX, CY + 100), SELF);
+});

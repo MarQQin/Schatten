@@ -140,10 +140,10 @@ export function computeShadow(near: Grid, far: Grid | null, sun: SunDir): Uint8A
   const ns = sweep(near, sun, ox, oy, init);
 
   const { Lx, Ly, Px, Py } = directions(sun);
-  const e = (sun.elevation * Math.PI) / 180;
-  const a = (sun.gridAzimuth * Math.PI) / 180;
-  const sx = Math.cos(e) * Math.sin(a), sy = Math.cos(e) * Math.cos(a), sz = Math.sin(e);
+  const tanE = Math.tan((sun.elevation * Math.PI) / 180);
   const { width: w, height: h, data: z, res } = near;
+  // self-shadow probe: one cell toward the sun (−L)
+  const probeX = -Lx * res, probeY = -Ly * res, probeRise = res * tanE;
 
   for (let r = 0; r < h; r++) {
     const y = near.ymax - (r + 0.5) * res;
@@ -151,13 +151,10 @@ export function computeShadow(near: Grid, far: Grid | null, sun: SunDir): Uint8A
       const i = r * w + c;
       const zc = z[i];
       if (Number.isNaN(zc)) { mask[i] = NODATA; continue; }
-      // self-shadow: surface normal (−dz/dx, −dz/dy, 1) · sun ≤ 0
-      const zl = c > 0 ? z[i - 1] : zc, zr = c < w - 1 ? z[i + 1] : zc;
-      const zu = r > 0 ? z[i - w] : zc, zd = r < h - 1 ? z[i + w] : zc;
-      const dzdx = (zr - zl) / ((c > 0 && c < w - 1 ? 2 : 1) * res);
-      const dzdy = (zu - zd) / ((r > 0 && r < h - 1 ? 2 : 1) * res);
-      if (!Number.isNaN(dzdx + dzdy) && -dzdx * sx - dzdy * sy + sz <= 0) { mask[i] = SELF; continue; }
       const x = near.xmin + (c + 0.5) * res;
+      // self-shadow: the ground one cell toward the sun rises steeper than the sun
+      // (a centred-difference normal fails on crests and in gullies)
+      if (sample(near, x + probeX, y + probeY) - zc > probeRise) { mask[i] = SELF; continue; }
       const t = (x - ox) * Lx + (y - oy) * Ly;
       const v = (x - ox) * Px + (y - oy) * Py;
       mask[i] = zc < surfaceAt(ns, t, v) - EPS ? CAST : LIT;
