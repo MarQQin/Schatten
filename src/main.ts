@@ -9,6 +9,7 @@ import { lv95, LV95_EXTENT, RESOLUTIONS, lv95ToWgs84, trueNorthInGrid, wmtsSourc
 import { buffer, getHeight, getWidth } from 'ol/extent';
 import { sunPosition, zurichNow, zurichToDate } from './sun';
 import { loadGrid, sample, stats, type Grid } from './dem';
+import { ShadowLayer } from './shadowLayer.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const dateInput = $<HTMLInputElement>('date');
@@ -18,6 +19,7 @@ const layerSelect = $<HTMLSelectElement>('baselayer');
 const sunInfo = $<HTMLDivElement>('sun');
 const terrainInfo = $<HTMLDivElement>('terrain');
 const heightInfo = $<HTMLDivElement>('height');
+const opacityInput = $<HTMLInputElement>('opacity');
 
 const SHADOW_RADIUS = 15000; // m: terrain further away is ignored
 const MAX_VIEW_SIZE = 25000; // m: beyond this, no shadow computation
@@ -42,9 +44,10 @@ const view = new View({
   zoom: Number(params.get('z') ?? 20),
   constrainOnlyCenter: true,
 });
+const shadow = new ShadowLayer();
 const map = new Map({
   target: 'map',
-  layers: [baseLayer],
+  layers: [baseLayer, shadow.layer],
   controls: defaultControls().extend([new ScaleLine()]),
   view,
 });
@@ -81,6 +84,7 @@ function update() {
     sun.elevation > 0
       ? `Sonne: Azimut ${sun.azimuth.toFixed(1)}°, Höhe ${sun.elevation.toFixed(1)}°`
       : `Sonne unter dem Horizont (${sun.elevation.toFixed(1)}°)`;
+  shadow.setSun(sun);
   writeHash();
 }
 
@@ -99,11 +103,16 @@ layerSelect.addEventListener('change', () => {
 // --- terrain: view at 10 m, view + shadow radius at 40 m ---
 let terrain: { near: Grid; far: Grid } | null = null;
 let terrainGen = 0;
+let terrainText = '';
+shadow.onComputed = (ms) => {
+  terrainInfo.textContent = `${terrainText}, Schatten ${ms.toFixed(0)} ms`;
+};
 
 async function loadTerrain() {
   const extent = view.calculateExtent(map.getSize());
   if (Math.max(getWidth(extent), getHeight(extent)) > MAX_VIEW_SIZE) {
     terrain = null;
+    shadow.clear();
     terrainInfo.textContent = 'Gelände: zum Berechnen weiter hineinzoomen';
     return;
   }
@@ -118,10 +127,12 @@ async function loadTerrain() {
     ]);
     if (gen !== terrainGen) return; // superseded by a newer view
     terrain = { near, far };
+    shadow.setTerrain(near, far, currentSun());
     const mb = (stats.bytesDecoded - bytes0) / 1e6;
     terrainInfo.textContent =
       `Gelände: 10 m ${near.width}×${near.height}, 40 m ${far.width}×${far.height}` +
       ` (${mb.toFixed(1)} MB neu, ${((performance.now() - t0) / 1000).toFixed(1)} s)`;
+    terrainText = terrainInfo.textContent;
   } catch (err) {
     if (gen !== terrainGen) return;
     console.error(err);
@@ -133,6 +144,9 @@ function showHeight(coord: number[]) {
   const h = terrain ? sample(terrain.near, coord[0], coord[1]) : NaN;
   heightInfo.textContent = Number.isNaN(h) ? '' : `Höhe am Zeiger: ${h.toFixed(0)} m`;
 }
+opacityInput.addEventListener('input', () => shadow.layer.setOpacity(Number(opacityInput.value) / 100));
+shadow.layer.setOpacity(Number(opacityInput.value) / 100);
+
 map.on('pointermove', (e) => showHeight(e.coordinate));
 map.on('click', (e) => showHeight(e.coordinate));
 
