@@ -8,13 +8,20 @@
   <body>
     <div id="map"></div>
     <div id="panel">
-      <label>Karte
-        <select id="baselayer">
-          <option value="ch.swisstopo.pixelkarte-farbe">Landeskarte farbig</option>
-          <option value="ch.swisstopo.pixelkarte-grau">Landeskarte grau</option>
+      <div class="row">
+        <input type="date" id="date" />
+        <button id="now" type="button">Jetzt</button>
+        <select id="baselayer" aria-label="Karte">
+          <option value="ch.swisstopo.pixelkarte-farbe">Karte farbig</option>
+          <option value="ch.swisstopo.pixelkarte-grau">Karte grau</option>
           <option value="ch.swisstopo.swissimage">Luftbild</option>
         </select>
-      </label>
+      </div>
+      <div class="row">
+        <input type="range" id="time" min="0" max="1435" step="5" aria-label="Uhrzeit" />
+        <output id="timelabel">--:--</output>
+      </div>
+      <div class="row" id="sun">Sonne: –</div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

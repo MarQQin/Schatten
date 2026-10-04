@@ -36,3 +36,18 @@ export function wmtsSource(layer: string): XYZ {
     crossOrigin: 'anonymous',
   });
 }
+
+/** LV95 easting/northing to WGS84 [lon, lat]. */
+export function lv95ToWgs84(e: number, n: number): [number, number] {
+  return proj4('EPSG:2056', 'EPSG:4326', [e, n]) as [number, number];
+}
+
+/**
+ * Angle of true north measured clockwise from LV95 grid north, in degrees
+ * (meridian convergence; negative east of Bern). Grid azimuth = true azimuth + this.
+ */
+export function trueNorthInGrid(e: number, n: number): number {
+  const [lon, lat] = lv95ToWgs84(e, n);
+  const [e1, n1] = proj4('EPSG:4326', 'EPSG:2056', [lon, lat + 0.01]);
+  return (Math.atan2(e1 - e, n1 - n) * 180) / Math.PI;
+}

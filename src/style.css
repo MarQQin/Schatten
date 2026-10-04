@@ -1,8 +1,18 @@
 html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; }
 #map { position: absolute; inset: 0; }
 #panel {
-  position: absolute; top: 8px; right: 8px; z-index: 1;
+  position: absolute; top: 8px; right: 8px; z-index: 1; width: 320px; box-sizing: border-box;
   background: rgba(255, 255, 255, 0.92); padding: 8px 10px; border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  display: flex; flex-direction: column; gap: 6px;
 }
-#panel select { font: inherit; margin-left: 4px; }
+#panel .row { display: flex; align-items: center; gap: 6px; }
+#panel input, #panel select, #panel button { font: inherit; }
+#time { flex: 1; min-width: 0; }
+#timelabel { font-variant-numeric: tabular-nums; font-weight: 600; width: 3.2em; text-align: right; }
+#sun { color: #333; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  #panel { top: auto; bottom: 36px; left: 8px; right: 8px; width: auto; }
+  #time { height: 28px; }
+}
